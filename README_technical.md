@@ -22,13 +22,24 @@ trade-offs behind the defaults.
 
 ### Windows (`spotify_ad_mute_windows.py`)
 - **Detection**: polls the Spotify window title via `pywin32`. A real track
-  shows `"Artist - Song"`; ads, pauses, and idle states all fall back to a
-  generic title (`"Spotify"`, `"Spotify Free"`, `"Advertisement"`, or
-  empty) — Windows has no official "this is an ad" flag, so this is a
-  heuristic, not an exact signal like macOS's.
-- **Muting**: uses `pycaw` to mute Spotify's entry in the Windows Core
-  Audio per-app volume mixer — a real OS-level mute of just that process,
+  always shows `"Artist - Song"`; an ad has no artist, so the title is just
+  the advertiser's name (e.g. `"Don Omar"`), and pauses/idle states fall
+  back to `"Spotify Free"` / `"Spotify Premium"`. Rule: **no `" - "`
+  separator ⇒ not a real track ⇒ mute.** Windows has no official "this is
+  an ad" flag, so this is a heuristic, not an exact signal like macOS's.
+  The `Anuncio • 2 de 3` label in the now-playing bar is *not* reachable
+  from outside the process: Spotify is a CEF (Chromium) app with web
+  accessibility disabled, so UI Automation sees an empty pane.
+- **Finding the window**: Spotify's main window no longer uses the old
+  `SpotifyMainWindow` class — it's the generic Chromium `Chrome_WidgetWin_1`.
+  The script matches on the owning process instead: the only *visible*
+  top-level window belonging to `Spotify.exe` is the player window.
+- **Muting**: uses `pycaw` to mute Spotify's entries in the Windows Core
+  Audio per-app volume mixer — a real OS-level mute of just those processes,
   independent of the volume level (so no saved-volume bookkeeping needed).
+  Spotify runs **several `Spotify.exe` processes** (UI, audio, ...) and each
+  has its own mixer session; only one of them actually emits sound, so the
+  script mutes/unmutes all of them as a group.
 
 ### Browser extension (`extension/`)
 - **Detection**: a content script watches `document.title` via a
@@ -46,7 +57,7 @@ trade-offs behind the defaults.
 |---|---|---|---|
 | `POLL_INTERVAL` | mac/Windows scripts | `1.0`s | How often it checks. Lower = faster reaction, more overhead. |
 | `FALLBACK_VOLUME` | mac/Windows scripts | `100` | Volume restored to when there's no better "before ad" value to fall back on. |
-| `NON_TRACK_TITLES` | Windows script | 5 known titles | Titles treated as "not a real track." Add any others you observe. |
+| `TRACK_SEPARATOR` | Windows script | `" - "` | Substring that identifies a normal "Artist - Song" title; anything without it is treated as an ad. Would need updating if Spotify changes its title format. |
 | `" • "` title check | browser `content.js` | — | The substring that identifies a normal "Song • Artist" title. Would need updating if Spotify changes its title format. |
 
 ## Cost vs. precision
@@ -72,7 +83,9 @@ All three versions guard against ending up stuck muted:
 - **On startup** (scripts) / **on browser restart or extension reload**
   (extension) — force-unmutes if it finds Spotify already muted.
 - **Continuously while running** — if it ever sees "no ad, but still
-  muted," it self-heals immediately.
+  muted," it self-heals immediately. (On Windows the mute decision is made
+  from the *actual* mixer state on every poll, so startup and self-heal are
+  the same code path.)
 
 **Limitation**: a hard kill — `kill -9` (mac), Task Manager "End task" /
 `taskkill /F` (Windows), or force-removing the browser extension mid-ad —
@@ -235,7 +248,8 @@ automatically on every matching page until removed. To disable/remove:
 
 
 - **Windows / browser**: the title heuristic can't tell "ad" from "paused"
-  — both mute. Cosmetic, not a functional issue.
+  — both mute. Cosmetic, not a functional issue. On Windows, local files
+  with no artist tag (title lacks `" - "`) are muted too.
 - **macOS**: requires one-time Automation permission for "System Events"
   and "Spotify" (System Settings > Privacy & Security > Automation).
 - **All three**: a hard kill of the watcher process bypasses cleanup (see
