@@ -1,0 +1,25 @@
+[project]
+name = "spotify-mute-ads"
+version = "0.1.0"
+description = "Automatically mutes Spotify while ads play and restores the volume when they end"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    # Windows only: per-app volume control via the Windows audio session API.
+    # macOS uses only the standard library (osascript via subprocess).
+    "pycaw>=20240210; sys_platform == 'win32'",
+    "pywin32>=306; sys_platform == 'win32'",
+    "comtypes>=1.4; sys_platform == 'win32'",
+    "pywin32>=312",
+]
+
+[dependency-groups]
+# Only needed to build a standalone executable (see README_technical.md).
+# Install with: uv sync --group build
+build = [
+    "pyinstaller>=6.0",
+]
+
+[tool.uv]
+# This project is a set of scripts, not an installable package.
+package = false

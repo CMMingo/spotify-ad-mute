@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Spotify Web Ad Mute",
+  "version": "1.0",
+  "description": "Mutes only the Spotify tab while an ad is playing (open.spotify.com).",
+  "permissions": ["tabs"],
+  "host_permissions": ["https://open.spotify.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://open.spotify.com/*"],
+      "js": ["content.js"]
+    }
+  ]
+}
